@@ -1,10 +1,10 @@
 - name: Apply Security Group Role
   hosts: localhost
   gather_facts: false
-
+  # Create 2 security groups for HTTP Load Balancer access
   tasks: 
     - name: Create EC2 Security Group "pik-ec2-sg"
-      include_role:
+      ansible.builtin.include_role:
         name: create_security_group
       vars:
         security_group_name: "pik-ec2-sg"
@@ -23,7 +23,7 @@
       register: 
         ec2_sg_result
     - name: Create ELB Security Group "pik-elb-sg"
-      include_role:
+      ansible.builtin.include_role:
         name: create_security_group
       vars:
         security_group_name: "pik-elb-sg"
@@ -49,3 +49,4 @@
             group_desc: ELB access EC2 API egress
       register: 
         elb_sg_result
+  
