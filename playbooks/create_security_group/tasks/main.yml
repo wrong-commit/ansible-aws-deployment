@@ -7,9 +7,6 @@
     rules: "{{ security_group_rules }}"
     rules_egress: "{{ security_group_egress_rules }}"
     state: present
-  register: security_group
-  tags: create_sg
-
-- name: Display security group details
+- name: Debug the dictionary
   debug:
-    msg: "Security Group ID: {{ security_group.group_id }}"
+    var: register
