@@ -28,10 +28,12 @@ jobs:
           sudo apt install -y ansible
       # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook / Build EC2 
+        # Run Ansible from playbooks directory to assist with routing
+        working-directory: ./playbooks
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
-          ansible-playbook playbooks/main_create_security_group.yml
+          ansible-playbook main_create_security_group.yml
       # Run Ansible playbook to build EC2 instance
       #- name: Run Ansible Playbook / Build EC2 
       #  env:
