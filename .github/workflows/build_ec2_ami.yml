@@ -13,7 +13,7 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
-    name: Build EC2 AMI
+    name: Test running Ansible playbooks 
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -26,13 +26,26 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y ansible
-      # Install Ansible AWS Module Depdencies
-      - name: Install dependencies for Ansible which runs in venv
+      # Install boto3 and botocore dependencies when using the local act command runner
+      - name: ACT - Install boto dependencies 
+        # Only run when act is running the build
+        if: ${{ env.CI_ACT == 'true' }}
         run: |
-          source /opt/pipx/venvs/ansible-core/bin/activate
-          python -m pip install boto3 botocore
+          sudo apt install -y python3-boto3 python3-botocore
+      # Install Ansible AWS Module Depdencies
+      - name: GH - Install dependencies for Ansible which runs in venv
+        # Only run if CI_ACT is not set or is false
+        if: ${{ env.CI_ACT == 'false' || env.CI_ACT == '' || env.CI_ACT == null }}
+        # Only run of venv exists 
+        run: |
+          if [[ -f "/opt/pipx/venvs/ansible-core/bin/activate" ]]; then  
+            source /opt/pipx/venvs/ansible-core/bin/activate
+            python -m pip install boto3 botocore
+          fi
+          #source /opt/pipx/venvs/ansible-core/bin/activate
+          #python -m pip install boto3 botocore
       # Run Ansible playbook to build Security Group
-      - name: Run Ansible Playbook / Build EC2 
+      - name: Run Ansible Playbook 
         # Run Ansible from playbooks directory to assist with routing
         working-directory: ./playbooks
         env:
