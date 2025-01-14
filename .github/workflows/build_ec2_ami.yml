@@ -29,6 +29,7 @@ jobs:
       # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook / Build EC2 
         # Run Ansible from playbooks directory to assist with routing
+        working-directory: ./playbooks
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
