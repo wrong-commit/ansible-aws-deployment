@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install -y ansible
+          sudo apt install -y ansible boto3
       # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook / Build EC2 
         # Run Ansible from playbooks directory to assist with routing
