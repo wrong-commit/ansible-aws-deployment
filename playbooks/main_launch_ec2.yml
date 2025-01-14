@@ -92,20 +92,22 @@
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
         force: false
-    - name: Create EC2 
-      # Fails because 
+    - name: Create EC2 Build Server
       amazon.aws.ec2_instance:
         # Ensure EC2 instance is created running 
-        state: running 
+        # state: running 
+        state: present 
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         # Instance name - auto generated 
-        name: "pik-build-{{ now() }}"
+        # name: "pik-build-{{ now() }}"
+        name: "pik-build"
         # User Data Script 
         user_data: |
           #!/bin/bash
           echo test message > /etc/quinn-wuz-here
+          echo {{ aws_access_key }} >> /etc/quinn-wuz-here
           python -v 
         # SSH Key Pair Name 
         key_name: "pik-keypair"
@@ -125,5 +127,92 @@
           Owner: Ash Ketchum
           Automation: Ansible
           Source: https://github.com/wrong-commit/ansible-aws-deployment
-
-
+      register: pik_ec2_result
+    # - name: Debug EC2 instance ID 
+    #   debug: 
+    #     var: pik_ec2_result.instances[0].instance_id
+    # - name: Display EC2 details
+    #   debug:
+    #     var: "{{ pki_target_ami_instance }}"
+    #   vars:
+    #     pki_target_ami_instance: "pik_ec2_result.instance_ids[0]"
+    #     pkie_target_ami_instance_2: "pik_ec2_result.instances[0].instance_id"
+    # - name: Debug pki_target_ami_instance
+    #   debug:
+    #     var: "{{ pik_ec2_result.instances[0].instance_id }}"
+    # - name: Debug pki_target_ami_instance
+    #   debug:
+    #     var: "{{ pik_ec2_result.instances[0].instance_id }}"
+    - name: Set EC2 Instance ID for AMI Target 
+      set_fact:
+        pki_target_ami_instance: "{{ pik_ec2_result.instance_ids[0] }}"
+    - name: Display EC2 details
+      debug:
+        msg: "EC2 Instance ID: {{ pki_target_ami_instance }}"    
+    - name: Stop EC2 Build Server to create AMI  
+      amazon.aws.ec2_instance:
+        instance_ids: [ "{{ pki_target_ami_instance }}" ]
+        state: stopped
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+    - name: Create AMI 
+      amazon.aws.ec2_ami: 
+        # Need a way to version these. Might use commit hash, would prefer to use build variable consistent with git tag
+        name: "Pikachu Server. Ubuntu 24.04 LTS " 
+        description: AMI for Pikachu application. Ubuntu Server 24.04 LTS (HVM). Built on {{ now() }}
+        instance_id: "{{ pki_target_ami_instance }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"    
+        # Keep snapshots of build server after deleting AMI
+        # delete_snapshot: false
+        # Wait for the AMI to be available before returning
+        wait: true
+        wait_timeout: 1200
+        tags:
+          Created: "{{ now() }}"
+          Service: Pikachu 
+          Environment: Testing
+          Owner: Ash Ketchum
+          Automation: Ansible
+          Source: "PKI Build Server {{ pki_target_ami_instance }}"
+      register: pki_ami_result
+    - name: Debug AMI result 
+      debug: 
+        var: pki_ami_result
+    - name: Delete EC2 Build Server 
+      amazon.aws.ec2_instance:
+        instance_ids: [ "{{ pki_target_ami_instance }}" ]
+        state: terminated 
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+    # - name: Deploy Built EC2 Image from AMI 
+    #   amazon.aws.ec2_instance:
+    #     # Ensure EC2 instance is created running 
+    #     state: running 
+    #     region: "{{ aws_region }}"
+    #     aws_access_key: "{{ aws_access_key }}"
+    #     aws_secret_key: "{{ aws_secret_key }}"
+    #     # Instance name
+    #     name: "pik-live"
+    #     # SSH Key Pair Name 
+    #     key_name: "pik-keypair"
+    #     # Subnet 1 
+    #     vpc_subnet_id: "{{ pik_subnet_1_result.subnet.id }}"
+    #     # Instance size
+    #     instance_type: t2.micro
+    #     security_group: "{{ ec2_sg_result.group_id }}"
+    #     network_interfaces:
+    #       - assign_public_ip: true
+    #     # Ubuntu Server 24.04 LTS (HVM), SSD Volume Type
+    #     # image_id: "{{ pki_ami_result.}}" 
+    #     tags:
+    #       Created: "{{ now() }}"
+    #       Service: Pikachu 
+    #       Environment: Testing
+    #       Owner: Ash Ketchum
+    #       Automation: Ansible
+    #       Source: https://github.com/wrong-commit/ansible-aws-deployment
+    #   register: pik_ec2_result
