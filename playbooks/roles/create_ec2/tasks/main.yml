@@ -1,0 +1,16 @@
+# Task definition to create AWS Securityu Group
+# 
+- name: Create AWS security group
+  ec2_group:
+    name: "{{ security_group_name }}"
+    description: "{{ security_group_description }}"
+    region: "{{ aws_region }}"
+    rules: "{{ security_group_rules }}"
+    rules_egress: "{{ security_group_egress_rules }}"
+    state: present
+  register: security_group
+  tags: create_sg
+
+- name: Display security group details
+  debug:
+    msg: "Security Group ID: {{ security_group.group_id }}"

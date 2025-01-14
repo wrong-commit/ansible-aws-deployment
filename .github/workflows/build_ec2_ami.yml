@@ -20,19 +20,24 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-      # Install Ansible
+      # Install latest version of Ansible
       - name: Install Ansible
         shell: bash
         run: |
           sudo apt update
           sudo apt install -y ansible
-      # Run Ansible playbook to build EC2 instance
+      # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook / Build EC2 
         env:
-          ANSIBLE_USER: ${{ secrets.ANSIBLE_USER }}
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
-          ansible-playbook -i inventory/hosts.ini playbooks/deploy_web_server.yml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
+          ansible-playbook playbooks/main_create_security_group.yml
+      # Run Ansible playbook to build EC2 instance
+      #- name: Run Ansible Playbook / Build EC2 
+      #  env:
+      #    ANSIBLE_HOST_KEY_CHECKING: False
+      #  run: |
+      #    ansible-playbook -i inventory/hosts.ini playbooks/main_launch_ec2.yml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
         run: |
