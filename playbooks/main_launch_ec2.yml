@@ -105,7 +105,7 @@
         # User Data Script 
         user_data: |
           #!/bin/bash
-          echo test message
+          echo test message > /etc/quinn-wuz-here
           python -v 
         # SSH Key Pair Name 
         key_name: "pik-keypair"
