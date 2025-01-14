@@ -45,7 +45,7 @@
           - proto: tcp
             from_port: 3000
             to_port: 3000
-            group_id: {{ ec2_sg_result.group_id }}
+            group_id: "{{ ec2_sg_result.group_id }}"
             group_desc: ELB access EC2 API egress
       register: 
         elb_sg_result
