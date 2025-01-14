@@ -1,27 +1,51 @@
 - name: Apply Security Group Role
   hosts: localhost
   gather_facts: false
-  roles:
-    - role: create_security_group
+
+  tasks: 
+    - name: Create EC2 Security Group "pik-ec2-sg"
+      include_role:
+        name: create_security_group
       vars:
-        security_group_name: "web-server-sg"
-        security_group_description: "Security group for web servers"
+        security_group_name: "pik-ec2-sg"
+        security_group_description: "Security group for EC2 servers"
+        # Allow Global SSH        
+        security_group_rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+            group_desc: Allow global SSH access        
+        security_group_egress_rules:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+            group_desc: Allow all traffic outbound
+      register: 
+        ec2_sg_result
+    - name: Create ELB Security Group "pik-elb-sg"
+      include_role:
+        name: create_security_group
+      vars:
+        security_group_name: "pik-elb-sg"
+        security_group_description: "Security group for ELB"
         security_group_rules:
           # Allow HTTP 
           - proto: tcp
             from_port: 80
             to_port: 80
             cidr_ip: 0.0.0.0/0
+            group_desc: Global HTTP traffic inbound
           # Allow HTTPS
           - proto: tcp
             from_port: 443
             to_port: 443
             cidr_ip: 0.0.0.0/0
-          # Allow Global SSL         
-          - proto: tcp
-            from_port: 22
-            to_port: 22
-            cidr_ip: 0.0.0.0/0
+            group_desc: Global HTTPS traffic inbound
         security_group_egress_rules:
-          - proto: all
-            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 3000
+            to_port: 3000
+            group_id: {{ ec2_sg_result.group_id }}
+            group_desc: ELB access EC2 API egress
+      register: 
+        elb_sg_result

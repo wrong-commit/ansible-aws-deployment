@@ -1,13 +1,12 @@
 # Description
 
 A sample configuration IaC repository that builds an AWS EC2 AMI 
-using Ansible. 
+using Ansible. Dummy application name is Pikachu. 
 
 # Playbooks     
 
-`main_create_security_group.yml` Creates a Security Group using a custom role 
-
-
+All playbooks used for deploying the application are listed in the `playbooks/` directory.  
+1. `main_create_security_group.yml` creates a Security Group using a custom role 
 
 
 # CI/CD Pipeline

@@ -1,5 +1,4 @@
-# Task definition to create AWS Securityu Group
-# 
+# Task definition to create AWS Security Group
 - name: Create AWS security group
   ec2_group:
     name: "{{ security_group_name }}"
