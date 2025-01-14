@@ -25,17 +25,12 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install -y ansible python3-boto3 python3-botocore
-      - name: Set Python interpreter for Ansible
+          sudo apt install -y ansible
+      # Install Ansible AWS Module Depdencies
+      - name: Install dependencies for Ansible which runs in venv
         run: |
-          echo "ANSIBLE_PYTHON_INTERPRETER=$(which python)" >> $GITHUB_ENV
-      - name: DEBUG Python version 
-        run: |
-          python --version
-          python3 --version
-      - name: DEBUG Ansible version 
-        run: |
-          ansible --version
+          source /opt/pipx/venvs/ansible-core/bin/activate
+          python -m pip install boto3 botocore
       # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook / Build EC2 
         # Run Ansible from playbooks directory to assist with routing
