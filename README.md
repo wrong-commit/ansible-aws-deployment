@@ -17,5 +17,13 @@ Environment variables that need to be added to each GitHub Action Environment ar
 Secrets that need to be added to each GitHub Action Environment are as follows:  
 - `ANSIBLE_USER`. User that Ansible logs in as.  
 - `AWS_ACCESS_KEY`. AWS Access Key  
-- `AWS_SECRET_KEY`. AWS Secret Key  
+- `AWS_SECRET_KEY`. AWS Secret Key
  
+# VPC  
+We want our VPC to be secure but provide internet access. 
+
+# Incrementing version numbers 
+Look into https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication   
+
+# Debugging 
+1. Use `sudo tail -f /var/log/cloud-init-output.log` on launch of Build EC2 VM to see output of logs

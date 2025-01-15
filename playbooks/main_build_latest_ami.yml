@@ -2,7 +2,19 @@
   hosts: localhost
   gather_facts: false
   # Create 2 security groups for HTTP Load Balancer access
+  # Creates VPC 
+  # Creates EC2 Key Pair 
+  # Builds EC2 Clean Image Server
+  # Generates AMI from EC2 Image 
+  # Deletes Build Server
+  # Starts production instance from build servver
   tasks: 
+    - assert:
+        that:
+        - aws_access_key != ""
+        - aws_secret_key != ""
+        - app_git_repo != ""
+        - app_git_branch != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
@@ -136,6 +148,7 @@
           git checkout {{ app_git_branch }}
           # Deploy with Docker Compose
           docker compose up -d
+          docker compose down 
         # SSH Key Pair Name 
         key_name: "pik-keypair"
         # Subnet 1 
@@ -148,7 +161,6 @@
         # Ubuntu Server 24.04 LTS (HVM), SSD Volume Type
         image_id: ami-003f5a76758516d1e 
         tags:
-          GitCommit: "{{ app_build_commit }}"
           GitRepo: "{{ app_git_repo }}"
           GitBranch: "{{ app_git_branch }}"
           Created: "{{ tag_ec2_creation_time }}"
@@ -213,7 +225,6 @@
         # DEBUG: Disable rebooting build server to take AMI
         no_reboot: true
         tags:
-          GitCommit: "{{ app_build_commit }}"
           GitRepo: "{{ app_git_repo }}"
           GitBranch: "{{ app_git_branch }}"
           Created: "{{ tag_ami_creation_time }}"

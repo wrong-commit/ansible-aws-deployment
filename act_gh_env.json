@@ -1,5 +1,4 @@
 {
-    "CI_ACT": true,
     "APP_GIT_REPO": "git@github.com:wrong-commit/AusPohzt.git",
-    "APP_GIT_BRNACH": "master" 
+    "APP_GIT_BRANCH": "master" 
 }
