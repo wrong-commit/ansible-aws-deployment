@@ -1,4 +1,4 @@
-# This is a basic workflow to help you get started with Actions
+# This is a basic workflow to build a new EC2 AMI for a given branch
 name: CI_Build_EC2_AMI
 
 # Controls when the workflow will run
@@ -29,24 +29,29 @@ jobs:
       # Install boto3 and botocore dependencies when using the local act command runner
       - name: ACT - Install boto dependencies 
         # Only run when act is running the build
-        if: ${{ env.CI_ACT == 'true' }}
+        if: ${{ github.event.act }}
         run: |
           sudo apt install -y python3-boto3 python3-botocore
       # Install Ansible AWS Module Depdencies
       - name: GH - Install dependencies for Ansible which runs in venv
         # Only run if CI_ACT is not set or is false
-        if: ${{ env.CI_ACT == 'false' || env.CI_ACT == '' || env.CI_ACT == null }}
-        # Only run of venv exists 
+        if: ${{ !github.event.act }}
         run: |
+          # Only run of venv exists 
           if [[ -f "/opt/pipx/venvs/ansible-core/bin/activate" ]]; then  
+            # Enter venv
             source /opt/pipx/venvs/ansible-core/bin/activate
+            # Install python modules in Ansible venv
             python -m pip install boto3 botocore
           fi
-          #source /opt/pipx/venvs/ansible-core/bin/activate
-          #python -m pip install boto3 botocore
       # Install Ansible AWS Collection
       - name: Install Ansible Modules
         run: ansible-galaxy collection install amazon.aws
+      # Syntax check Ansible playbook
+      - name: Syntax Check Ansible 
+        working-directory: ./playbooks
+        run: |
+          ansible-playbook --syntax-check main_build_latest_ami.yml 
       # Run Ansible playbook to build Security Group
       - name: Run Ansible Playbook 
         # Run Ansible from playbooks directory to assist with routing
@@ -54,7 +59,7 @@ jobs:
         # Run main_create_security_group playbook with secrets 
         # AWS_ACCESS_KEY, AWS_SECRET_KEY
         run: |
-          ansible-playbook main_launch_ec2.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }}"
+          ansible-playbook main_build_latest_ami.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ env.APP_GIT_REPO }} app_git_branch=${{ env.APP_GIT_BRANCH }} app_build_commit=${{ env.GITHUB_SHA }}"
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
         run: |
