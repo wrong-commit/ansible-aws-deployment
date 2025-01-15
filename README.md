@@ -18,6 +18,10 @@ Secrets that need to be added to each GitHub Action Environment are as follows:
 - `ANSIBLE_USER`. User that Ansible logs in as.  
 - `AWS_ACCESS_KEY`. AWS Access Key  
 - `AWS_SECRET_KEY`. AWS Secret Key
+
+## Instance Sizes 
+The build instances runs as a t2.small so it can compile the NodeJS applications.  
+The run instances run as a t2.micro instance.  
  
 # VPC  
 We want our VPC to be secure but provide internet access. 

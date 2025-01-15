@@ -1,6 +1,11 @@
 - name: Build EC2 Instance
   hosts: localhost
   gather_facts: false
+  vars:
+    # t2.small for building node JS applications and docker files 
+    pik_build_server_size: t2.small
+    # t2.micro for running NodeJS/nginx/Postgres
+    pik_live_server_size: t2.micro
   # Create 2 security groups for HTTP Load Balancer access
   # Creates VPC 
   # Creates EC2 Key Pair 
@@ -98,13 +103,31 @@
     - name: Display ELB SG details
       debug:
         msg: "ELB Security Group ID: {{ elb_sg_result.group_id }}"    
+    - name: Delete EC2 Key Pair
+      ec2_key:
+        name: pik-keypair
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"    
+        state: absent
     - name: Create EC2 Key Pair
       ec2_key:
         name: pik-keypair
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
-        force: false
+        # Overwrite existing keypair once
+        force: true
+    # Save key pair 
+    - name: Display the private key (only if created)
+      debug:
+        msg: "{{ keypair_result.key.private_key | default('Key already exists, no private key returned.') }}"
+    - name: Save private key to a file
+      copy:
+        content: "{{ keypair_result.key.private_key | default('') }}"
+        dest: "./pik-keypair.pem"
+        mode: '0400'
+      when: keypair_result.key.private_key is defined
     - name: Create EC2 Build Server
       amazon.aws.ec2_instance:
         # Ensure EC2 instance is created running 
@@ -148,13 +171,12 @@
           git checkout {{ app_git_branch }}
           # Deploy with Docker Compose
           docker compose up -d
-          docker compose down 
         # SSH Key Pair Name 
         key_name: "pik-keypair"
         # Subnet 1 
         vpc_subnet_id: "{{ pik_subnet_1_result.subnet.id }}"
-        # Instance size
-        instance_type: t2.micro
+        # Instance size. Bigger than t2.micro
+        instance_type: "{{ pik_build_server_size }}"
         security_group: "{{ ec2_sg_result.group_id }}"
         network_interfaces:
           - assign_public_ip: true
@@ -173,6 +195,12 @@
     - name: Debug EC2 details 
       debug: 
         var: pik_ec2_result
+    # Wait for Instance User Data Script to complete
+    # - raw: test -f /var/lib/cloud/instance/boot-finished
+    #   retries: 20
+    #   register: cmd_res
+    #   changed_when: false
+    #   until: cmd_res | success
     # - name: Display EC2 details
     #   debug:
     #     var: "{{ pik_target_ami_instance }}"
@@ -268,7 +296,7 @@
         # Subnet 1 
         vpc_subnet_id: "{{ pik_subnet_1_result.subnet.id }}"
         # Instance size
-        instance_type: t2.micro
+        instance_type: "{{ pik_live_server_size }}"
         security_group: "{{ ec2_sg_result.group_id }}"
         network_interfaces:
           - assign_public_ip: true
