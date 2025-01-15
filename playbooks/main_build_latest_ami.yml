@@ -143,25 +143,6 @@
         dest: "./pik-keypair.pem"
         mode: '0400'
       when: keypair_result.key.private_key is defined
-    # Create Target Group to get free health checks for EC2 build
-    - name: Create EC2 Build Server Target Group 
-      community.aws.elb_target_group:
-        name: "pik-build-{{ tag_ec2_creation_time }}-tg"
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
-        aws_region: "{{ aws_region }}"
-        protocol: http
-        port: 80
-        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
-        health_check_protocol: http
-        health_check_path: /health_check
-        health_check_port: 80
-        successful_response_codes: 200
-        health_check_interval: 15
-        health_check_timeout: 3
-        healthy_threshold_count: 4
-        unhealthy_threshold_count: 3
-        state: present
     # Create the EC2 instance. Run scripst to set up application 
     - name: Create EC2 Build Server
       amazon.aws.ec2_instance:
@@ -235,19 +216,39 @@
     - name: Display Build Server Instance ID
       debug:
         msg: "EC2 Instance ID: {{ pik_target_ami_instance }}"
-    - name: Assign Build EC2 to Target Group 
+    # Create Target Group to get free health checks for EC2 build
+    - name: Create EC2 Build Server Target Group 
       community.aws.elb_target_group:
         name: "pik-build-{{ tag_ec2_creation_time }}-tg"
+        state: present
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         aws_region: "{{ aws_region }}"
-        state: present
-        # Define same target twice 
+        # Per Instance Target 
+        target_type: instance
+        # Listen on HTTP only
+        protocol: http
+        port: 80
+        # VPC 
+        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
+        # Health check configuration
+        health_check_protocol: http
+        health_check_path: /healthcheck
+        health_check_port: 80
+        successful_response_codes: 200
+        health_check_interval: 15
+        health_check_timeout: 3
+        healthy_threshold_count: 4
+        unhealthy_threshold_count: 3
+        # Define same target twice to check both services 
         targets:
           - Id: "{{ pik_target_ami_instance }}"
             Port: 4000
           - Id: "{{ pik_target_ami_instance }}"
             Port: 5000
+      register: pik_elb_tg_result
+    - debug:
+        var: pik_elb_tg_result
     # Create Load Balancer for checking Target Group Health
     - name: Create Build Server Load Balancer 
       amazon.aws.elb_application_lb:
@@ -272,6 +273,7 @@
               - Type: forward # Required.
                 TargetGroupName: "pik-build-{{ tag_ec2_creation_time }}-tg" # Required. The name of the target group
         state: present
+      register: pik_elb_result
     # Get ELB Target Group Health Status
     - name: Get ELB Target Group Health Status
       community.aws.elb_target_group_info:
@@ -287,7 +289,11 @@
     - debug:
         var: elb_status_result
     - debug:
-        var: "{{ elb_status_result.target_groups[0].targets_health_description[0].target_health.state }}"
+        msg: "{{ elb_status_result.target_groups }}"
+    - debug:
+        msg: "{{ elb_status_result.target_groups[0] }}"
+    - debug:
+        msg: "{{ elb_status_result.target_groups[0].target_group_arn }}"
     # Debug - Stop here to wait for instance before creating AMI 
     - name: Killing Playbook before AMI creation 
       meta: end_play
