@@ -29,5 +29,15 @@ We want our VPC to be secure but provide internet access.
 # Incrementing version numbers 
 Look into https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication   
 
+# AWS CLI usage in Ansible 
+It was unavoidable to use awscli directly in Ansible. The AWS CloudWatch get-metric-data command does not exist in 
+Ansible. This means I cannot check for a Healthy status before creating an AMI. 
+
 # Debugging 
 1. Use `sudo tail -f /var/log/cloud-init-output.log` on launch of Build EC2 VM to see output of logs
+
+# TODO 
+[x] Build EC2 instance and deploy application code successfully
+[ ] Detect when EC2 is ready to have AMI created (auto build deployments)
+[ ] Configure Auto Deployments into ELB Target Groups
+[ ] Signature verify aws cli in build_ec2_ami.yml
