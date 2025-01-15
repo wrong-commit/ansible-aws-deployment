@@ -96,8 +96,8 @@
     - name: Create EC2 Build Server
       amazon.aws.ec2_instance:
         # Ensure EC2 instance is created running 
-        # state: running 
-        state: present 
+        state: running 
+        # state: present 
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
