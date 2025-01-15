@@ -155,14 +155,14 @@
     # - name: Debug pik_target_ami_instance
     #   debug:
     #     var: "{{ pik_ec2_result.instances[0].instance_id }}"
-    - name: Display Build Server Instance ID
-      debug:
-        msg: "EC2 Instance ID: {{ pik_target_ami_instance }}"
     - name: Set next AMI variables 
       set_fact:
         pik_target_ami_instance: "{{ pik_ec2_result.instance_ids[0] }}"
         pik_target_ami_name: "Pikachu-Server-Ubuntu-24-04-LTS-{{ tag_ec2_creation_time }}"
         tag_ami_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
+    - name: Display Build Server Instance ID
+      debug:
+        msg: "EC2 Instance ID: {{ pik_target_ami_instance }}"
     - name: Display next AMI details
       debug:
         msg: "Next AMI name: {{ pik_target_ami_name }}"   
