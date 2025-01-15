@@ -103,7 +103,8 @@
         aws_secret_key: "{{ aws_secret_key }}"
         # Instance name - auto generated 
         name: "pik-build-{{ tag_ec2_creation_time }}"
-        # User Data Script in bash. 
+        # User Data Script in bash. sudo included so script can be copy+pasted into a failed build 
+        # EC2 for easier debugging. 
         user_data: |
           #!/bin/bash
           # Lay my claim
@@ -111,9 +112,26 @@
           # Test secret dumping
           echo AWS_ACCESS_KEY={{ aws_access_key }} >> /etc/quinn-wuz-here
           # Install necessary packages. Git, Docker
-          apt-get install -y git docker docker-compose
+          apt-get update 
+          # Install official Docker repo
+          sudo apt-get install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          # Add the repository to Apt sources:
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          # Install git
+          sudo apt-get install -y git 
+          # Install docker and plugins 
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
           # Clone application repository
-          git clone {{ app_git_repo }} /opt/app
+          sudo mkdir /opt/app
+          git clone {{ app_git_repo }} /tmp/app
+          sudo mv /tmp/app /opt
           cd /opt/app
           git checkout {{ app_git_branch }}
           # Deploy with Docker Compose
@@ -163,9 +181,13 @@
     - name: Display Build Server Instance ID
       debug:
         msg: "EC2 Instance ID: {{ pik_target_ami_instance }}"
+    # Debug
+    - name: Killing Playbook before AMI creation 
+      meta: end_play
     - name: Display next AMI details
       debug:
         msg: "Next AMI name: {{ pik_target_ami_name }}"   
+    # Stops the EC2 instance before creating AMI. 
     # - name: Stop EC2 Build Server to create AMI  
     #   amazon.aws.ec2_instance:
     #     instance_ids: [ "{{ pik_target_ami_instance }}" ]
@@ -173,6 +195,7 @@
     #     region: "{{ aws_region }}"
     #     aws_access_key: "{{ aws_access_key }}"
     #     aws_secret_key: "{{ aws_secret_key }}"
+    # Create AMI of running application
     - name: Create AMI 
       amazon.aws.ec2_ami: 
         # Need a way to version these. Might use commit hash, would prefer to use build variable consistent with git tag
@@ -203,13 +226,15 @@
     - name: Debug AMI result 
       debug: 
         var: pik_ami_result
-    - name: Start EC2 Build Server 
-      amazon.aws.ec2_instance:
-        instance_ids: [ "{{ pik_target_ami_instance }}" ]
-        state: running 
-        region: "{{ aws_region }}"
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
+    # Restart the EC2 Build Server for debugging
+    # - name: Start EC2 Build Server 
+    #   amazon.aws.ec2_instance:
+    #     instance_ids: [ "{{ pik_target_ami_instance }}" ]
+    #     state: running 
+    #     region: "{{ aws_region }}"
+    #     aws_access_key: "{{ aws_access_key }}"
+    #     aws_secret_key: "{{ aws_secret_key }}"
+    # Delete Build Server on successful start
     # - name: Delete EC2 Build Server 
     #   amazon.aws.ec2_instance:
     #     instance_ids: [ "{{ pik_target_ami_instance }}" ]
@@ -217,7 +242,7 @@
     #     region: "{{ aws_region }}"
     #     aws_access_key: "{{ aws_access_key }}"
     #     aws_secret_key: "{{ aws_secret_key }}"
-    # Deploy new EC2 instance 
+    # Deploy new EC2 instance named 
     - name: Deploy Built EC2 Image from AMI 
       amazon.aws.ec2_instance:
         # Ensure EC2 instance is created running 
@@ -226,7 +251,7 @@
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         # Instance name
-        name: "pik-live"
+        name: "pik-live-"
         # SSH Key Pair Name 
         key_name: "pik-keypair"
         # Subnet 1 
