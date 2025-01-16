@@ -13,6 +13,12 @@ https://github.com/nektos/act to run `act.sh`. Setup a .env file with all secret
 Environment variables that need to be added to each GitHub Action Environment are:  
 - `APP_GIT_REPO`. The git repository used to build EC2 application
 - `APP_GIT_BRANCH`. The git branch used to build the EC2 application
+- `CONF_API_URL`. The API url.
+- `CONF_DB_HOST`. The DB host.
+- `CONF_DB_PORT`. The DB port.
+- `CONF_DB_USER`. The DB user.
+- `CONF_DB_PASS`. The DB pass.
+
 
 Secrets that need to be added to each GitHub Action Environment are as follows:  
 - `ANSIBLE_USER`. User that Ansible logs in as.  
@@ -44,3 +50,5 @@ Ansible. This means I cannot check for a Healthy status before creating an AMI.
 [ ] Clean up build assets on playbook completion
 [ ] Signature verify aws cli in build_ec2_ami.yml
 [ ] Improve EC2 Deploy and AMI creation times by using Alpine Linux VM instead of Ubuntu
+[ ] Lots of duplicated variables values in playbooks. Change duplicated values to be default value for role
+[ ] Log user data script time to optimize expected timeouts 

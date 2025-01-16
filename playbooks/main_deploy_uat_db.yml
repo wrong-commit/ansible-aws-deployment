@@ -70,6 +70,26 @@
     - name: Display RDS SG details
       debug:
         msg: "RDS Security Group ID: {{ rds_sg_result.group_id }}"
+    # Add RDS SG access to EC2 SG 
+    - name: Add RDS access to EC2 SG 
+      amazon.aws.ec2_group:
+        name: pik-uat-rds-sg
+        description: Security group for UAT RDS servers
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
+        # Only add new RDS access rule to EC2
+        purge_rules: false
+        purge_rules_egress: false 
+        rules:
+          # Allow EC2 to access RDS 
+          - proto: tcp
+            from_port: "{{ conf_db_port }}"
+            to_port: "{{ conf_db_port }}"
+            group_id: "{{ rds_sg_result.group_id }}"
+            group_desc: Allow EC2 access to RDS
+        state: present
     - name: Create RDS Subnet Group
       amazon.aws.rds_subnet_group:
         state: present
@@ -99,7 +119,8 @@
           Application: Pikachu
       register: rds_result
     - name: RDS DNS Name
-      msg: "RDS DNS Name: {{ rds_result.endpoint.address }}" 
+      debug:
+        msg: "RDS DNS Name: {{ rds_result.endpoint.address }}" 
     # - name: Debug AMI result 
     #   debug: 
     #     var: pik_live_ec2_result

@@ -20,6 +20,11 @@
         - aws_secret_key != ""
         - app_git_repo != ""
         - app_git_branch != ""
+        - conf_api_url != ""
+        - conf_db_host != ""
+        - conf_db_port != ""
+        - conf_db_user != ""
+        - conf_db_pass != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
@@ -49,7 +54,7 @@
     - name: Create EC2 Security Group "pik-build-ec2-sg"
       amazon.aws.ec2_group:
         name: "pik-build-ec2-sg"
-        description: "Security group for EC2 servers"
+        description: "Security group for build EC2 servers"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -74,7 +79,7 @@
     - name: Create ELB Security Group "pik-build-elb-sg"
       ec2_group:
         name: "pik-build-elb-sg"
-        description: "Security group for ELB"
+        description: "Security group for build ELB"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         aws_region: "{{ aws_region }}"
@@ -95,8 +100,8 @@
         rules_egress:
           # ELB access EC2 on to API
           - proto: tcp
-            from_port: 4000
-            to_port: 4000
+            from_port: 5432
+            to_port: 5432
             group_id: "{{ ec2_sg_result.group_id }}"
             group_desc: ELB access EC2 API egress
           # ELB access EC2 on to FE
@@ -112,7 +117,7 @@
         # Add rules, don't replaces
         purge_rules: false
         purge_rules_egress: false
-        description: "Security group for EC2 servers"
+        description: "Security group for build EC2 servers"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -209,6 +214,14 @@
           sudo mv /tmp/app /opt
           cd /opt/app
           git checkout {{ app_git_branch }}
+          # Configure docker-compose file 
+          rm docker-compose.yml
+          export INJECT_API_URL={{ conf_api_url }}
+          export INJECT_DB_HOST={{ conf_db_host }}
+          export INJECT_DB_PORT={{ conf_db_port }}
+          export INJECT_DB_USER={{ conf_db_user }}
+          export INJECT_DB_PASS={{ conf_db_pass }}
+          envsubst < docker-compose.deploy.yml > docker-compose.yml
           # Deploy with Docker Compose
           docker compose up -d
         # SSH Key Pair Name 
@@ -227,7 +240,7 @@
           GitBranch: "{{ app_git_branch }}"
           Created: "{{ tag_ec2_creation_time }}"
           Service: Pikachu 
-          Environment: Testing
+          Environment: Build
           Owner: Ash Ketchum
           Automation: Ansible
           Source: https://github.com/wrong-commit/ansible-aws-deployment
@@ -354,7 +367,7 @@
           GitBranch: "{{ app_git_branch }}"
           Created: "{{ tag_ami_creation_time }}"
           Service: Pikachu 
-          Environment: Testing
+          Environment: Build
           Owner: Ash Ketchum
           Automation: Ansible
           Source: "pik Build Server {{ pik_target_ami_instance }}"
