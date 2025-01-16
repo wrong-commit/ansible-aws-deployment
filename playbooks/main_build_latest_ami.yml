@@ -53,8 +53,8 @@
         destination_cidr_block: "0.0.0.0/0"
     - name: Create EC2 Security Group "pik-build-ec2-sg"
       amazon.aws.ec2_group:
-        name: "pik-build-ec2-sg"
-        description: "Security group for build EC2 servers"
+        name: pik-build-ec2-sg
+        description: Security group for build EC2 servers
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
