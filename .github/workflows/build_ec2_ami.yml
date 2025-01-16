@@ -80,9 +80,6 @@ jobs:
         # AWS_ACCESS_KEY, AWS_SECRET_KEY
         run: |
           ansible-playbook main_build_latest_ami.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ env.APP_GIT_REPO }} app_git_branch=${{ env.APP_GIT_BRANCH }}"
-
-      
-      
       # Store generated keypair in Github Actions storage when created by Ansible first time
       # - name: Archive production artifacts
       #   uses: actions/upload-artifact@v4
