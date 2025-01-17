@@ -1,9 +1,17 @@
-- name: Build EC2 Instance
+- name: Deploy UAT/PROD Script 
   hosts: localhost
   gather_facts: false
   vars:
-    # t2.micro for running NodeJS/nginx/Postgres
-    pik_uat_server_size: t2.micro
+    pik_env: UAT # UAT/PROD
+    hostenvs:
+      UAT: 
+        ec2_size: t2.micro
+        name_prefix: pik-uat
+      PROD: 
+        ec2_size: t2.small 
+        name_prefix: pik-prod
+    ec2_size: "{{ hostenvs[pik_env].ec2_size }}"
+    name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
   # Create 2 security groups for HTTP Load Balancer access
   # Creates VPC 
   # Creates EC2 Key Pair 
@@ -20,18 +28,42 @@
         - aws_secret_key != ""
         # AWS Launch AMI 
         - app_ami_id != ""
+        - ec2_size != ""
+        - name_prefix != "" 
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
         tag_ec2_instance_name: "{{ '%Y%m%d-%H%M%S' | strftime }}"
-    - name: Create VPC "pik-uat-vpc"
+    - name: Create Secrets Manager 
+      include_role: 
+        name: create_secrets_manager
+      vars: 
+        secrets_name: "{{ name_prefix }}-sm"
+        conf_db_host: "123.456.789.123"
+        conf_db_port: "5432"
+        conf_db_user: "dummy_user"
+        conf_db_pass: "dummy_pass"
+        conf_api_url: "https://{{ name_prefix }}-api.hunterorbit.com.au"
+    - name: Create IAM roles 
+      include_role:
+        name: create_ec2_iam_role
+      vars:
+        iam_role_name: "{{ name_prefix }}-ec2-role"
+        secrets_manager_arn: "{{ secrets_result.secret.arn }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+    - name: DEBUG iam result 
+      debug: 
+        var: iam_ec2_role_result
+    - name: Create VPC
       include_role: 
         name: create_app_vpc
       vars:
         # VPC Name
-        vpc_name: "pik-uat-vpc"
+        vpc_name: "{{ name_prefix }}-vpc"
         # Internet Gateway Name
-        igw_name: "pik-uat-igw"
+        igw_name: "{{ name_prefix }}-igw"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -43,12 +75,12 @@
         subnet_1_cidr_block: "10.0.0.0/20"
         subnet_2_cidr_block: "10.0.16.0/20"
         subnet_3_cidr_block: "10.0.32.0/20"
-        route_table_name: "pik-uat-rtb-public"
+        route_table_name: "{{ name_prefix }}-rtb-public"
         # Route destination CIDR to global internet
         destination_cidr_block: "0.0.0.0/0"
-    - name: Create EC2 Security Group "pik-uat-ec2-sg"
+    - name: Create EC2 Security Group
       amazon.aws.ec2_group:
-        name: "pik-uat-ec2-sg"
+        name: "{{ name_prefix }}-ec2-sg"
         description: "Security group for UAT EC2 servers"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
@@ -71,9 +103,9 @@
     - name: Display EC2 SG details
       debug:
         msg: "EC2 Security Group ID: {{ ec2_sg_result.group_id }}"
-    - name: Create ELB Security Group "pik-uat-elb-sg"
+    - name: Create ELB Security Group 
       ec2_group:
-        name: "pik-uat-elb-sg"
+        name: "{{ name_prefix }}-elb-sg"
         description: "Security group for UAT ELB"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -108,7 +140,7 @@
       register: elb_sg_result
     - name: Add ELB access to EC2 in SG rules
       amazon.aws.ec2_group:
-        name: "pik-uat-ec2-sg"
+        name: "{{ name_prefix }}-ec2-sg"
         # Add rules, don't replaces
         purge_rules: false
         purge_rules_egress: false
@@ -139,7 +171,7 @@
         msg: "ELB Security Group ID: {{ elb_sg_result.group_id }}"    
     - name: Create EC2 Key Pair
       ec2_key:
-        name: pik-uat-keypair
+        name: "{{ name_prefix }}-keypair"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
@@ -156,9 +188,9 @@
         dest: "./pik-keypair.pem"
         mode: '0400'
       when: keypair_result.key.private_key is defined    
-    - name: Create EC2 UAT API Target Group 
+    - name: Create EC2 API Target Group 
       community.aws.elb_target_group:
-        name: "pik-uat-api-tg"
+        name: "{{ name_prefix }}-api-tg"
         state: present
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -190,9 +222,9 @@
       register: pik_elb_api_tg_result
     - debug:
         var: pik_elb_api_tg_result
-    - name: Create EC2 UAT FE Target Group 
+    - name: Create EC2 FE Target Group 
       community.aws.elb_target_group:
-        name: "pik-uat-fe-tg"
+        name: "{{ name_prefix }}-fe-tg"
         state: present
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -224,9 +256,9 @@
       register: pik_elb_fe_tg_result
     - debug:
         var: pik_elb_fe_tg_result
-    - name: Create UAT Server Load Balancer 
+    - name: Create Server Load Balancer 
       amazon.aws.elb_application_lb:
-        name: "pik-uat-elb"
+        name: "{{ name_prefix }}-elb"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         aws_region: "{{ aws_region }}"
@@ -241,24 +273,61 @@
             Port: 80 # Required. The port on which the load balancer is listening.
             DefaultActions:
               # TODO: Only forward traffic with specific Host header
-              - Type: forward # Required.
-                TargetGroupName: pik-uat-api-tg
+              - Type: fixed-response
+                FixedResponseConfig:
+                  ContentType: "text/plain"
+                  MessageBody: "No soup for you!"
+                  StatusCode: "200"
+            Rules: 
+              # Forward API traffic
+              - Conditions:
+                - Field: host-header
+                  Values: 
+                   - "{{ name_prefix }}-api.hunterorbit.com.au"
+                Priority: 1
+                Actions:
+                - TargetGroupName: "{{ name_prefix }}-api-tg"
+                  Type: forward
+              - Conditions:
+                - Field: host-header
+                  Values: 
+                   - "{{ name_prefix }}.hunterorbit.com.au"
+                Priority: 2
+                Actions:
+                - TargetGroupName: "{{ name_prefix }}-fe-tg"
+                  Type: forward
         state: present
       register: pik_elb_result
+    - debug: 
+        var: pik_elb_result
     # Create Launch Template for AMI
-    - name: Create new UAT Launch Template
+    - name: Create new Launch Template
       amazon.aws.ec2_launch_template:
-        name: "pik-uat-lt"
+        name: "{{ name_prefix }}-lt"
         version_description: "Version using AMI {{ app_ami_id }}"
         image_id: "{{ app_ami_id }}"
+        iam_instance_profile: "{{ iam_instance_profile_arn_result }}"
         default_version: latest
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
-        key_name: pik-uat-keypair
-        instance_type: "{{ pik_uat_server_size }}"
+        key_name: "{{ name_prefix }}-keypair"
+        instance_type: "{{ ec2_size }}"
         disable_api_termination: false
-        instance_initiated_shutdown_behavior: "stop"    
+        instance_initiated_shutdown_behavior: "stop"
+        metadata_options:
+          instance_metadata_tags: enabled
+        tag_specifications:
+          - tags:
+              Name: "{{ name_prefix }}-{{ tag_ec2_instance_name }}"
+              AWS_Secrets_Manager: "{{ name_prefix }}-sm"
+              Created: "{{ '%Y%m%d-%H%M%S' | strftime }}"
+              Service: Pikachu 
+              Environment: "{{ pik_env }}"
+              Owner: Ash Ketchum
+              Automation: Ansible
+              Source: https://github.com/wrong-commit/ansible-aws-deployment
+        # Assign network interface with EC2 SG 
         network_interfaces:
           - associate_public_ip_address: true
             device_index: 0
@@ -268,9 +337,9 @@
     # - debug:
     #     var: lt_result
     # Create Auto Scaling group
-    - name: Create UAT Auto Scaling Group 
+    - name: Create Auto Scaling Group 
       amazon.aws.autoscaling_group: 
-        name: pik-uat-asg
+        name: "{{ name_prefix }}-asg"
         launch_template:
           version: '$Latest'
           launch_template_id: "{{ lt_result.template.launch_template_id }}"
@@ -287,10 +356,11 @@
           - "{{ pik_subnet_2_result.subnet.id }}"
           - "{{ pik_subnet_3_result.subnet.id }}"
         tags:
-          - Name: "pik-uat-{{ tag_ec2_instance_name }}"
+          - Name: "{{ name_prefix }}-{{ tag_ec2_instance_name }}"
+          - AWS_Secrets_Manager: "{{ name_prefix }}-sm"
           - Created: "{{ '%Y%m%d-%H%M%S' | strftime }}"
           - Service: Pikachu 
-          - Environment: UAT
+          - Environment: "{{ pik_env }}"
           - Owner: Ash Ketchum
           - Automation: Ansible
           - Source: https://github.com/wrong-commit/ansible-aws-deployment
@@ -299,17 +369,15 @@
     - name: Create Scaling Policy for Scaling Up
       ec2_scaling_policy:
         state: present
-        name: pik-uat-scale-up-policy
+        name: "{{ name_prefix }}-scale-up-policy"
         adjustment_type: ChangeInCapacity
         scaling_adjustment: 1
-        asg_name: pik-uat-asg
+        asg_name: "{{ name_prefix }}-asg"
       register: scale_up_result
-    - debug:
-        var: scale_up_result
     - name: Create CloudWatch Scale Up Alarm 
       community.aws.ec2_metric_alarm:
         state: present
-        name: scale-up-cpu-alarm
+        name: "{{ name_prefix }}-scale-up-cpu-alarm"
         metric: CPUUtilization
         namespace: AWS/EC2
         statistic: Average
@@ -318,7 +386,7 @@
         period: 300
         evaluation_periods: 2
         dimensions:
-          AutoScalingGroupName: pik-uat-asg
+          AutoScalingGroupName: "{{ name_prefix }}-asg"
         alarm_actions:
           - "{{ scale_up_result.arn }}"
         ok_actions: []
@@ -327,15 +395,15 @@
     - name: Create Scaling Policy for Scaling Down
       ec2_scaling_policy:
         state: present
-        name: pik-uat-scale-down-policy
+        name: "{{ name_prefix }}-scale-down-policy"
         adjustment_type: ChangeInCapacity
         scaling_adjustment: -1
-        asg_name: pik-uat-asg
+        asg_name: "{{ name_prefix }}-asg"
       register: scale_down_result
     - name: Create CloudWatch Scale Down Alarm 
       community.aws.ec2_metric_alarm:
         state: present
-        name: scale-down-cpu-alarm
+        name: "{{ name_prefix }}-scale-down-cpu-alarm"
         metric: CPUUtilization
         namespace: AWS/EC2
         statistic: Average
@@ -344,7 +412,7 @@
         period: 300
         evaluation_periods: 2
         dimensions:
-          AutoScalingGroupName: pik-uat-asg
+          AutoScalingGroupName: "{{ name_prefix }}-asg"
         alarm_actions:
           - "{{ scale_down_result.arn }}" 
         ok_actions: []
@@ -353,7 +421,7 @@
     - name: Deploy EC2 Image from AMI 
       amazon.aws.ec2_instance:
         # Instance name
-        name: "pik-uat-{{ tag_ec2_instance_name }}"
+        name: "{{ name_prefix }}-{{ tag_ec2_instance_name }}"
         # Ensure EC2 instance is created running 
         state: running 
         region: "{{ aws_region }}"
@@ -361,20 +429,13 @@
         aws_secret_key: "{{ aws_secret_key }}"
         launch_template:
           id: "{{ lt_result.template.launch_template_id }}"
-        tags:
-          Created: "{{ '%Y%m%d-%H%M%S' | strftime }}"
-          Service: Pikachu 
-          Environment: UAT
-          Owner: Ash Ketchum
-          Automation: Ansible
-          Source: https://github.com/wrong-commit/ansible-aws-deployment
       register: pik_live_ec2_result
-    - name: Debug created server result 
-      debug: 
-        var: pik_live_ec2_result
+    # - name: Debug created server result 
+    #   debug: 
+    #     var: pik_live_ec2_result
     # Register instance in target groups
     - community.aws.elb_target_group:
-        name: pik-uat-api-tg
+        name: "{{ name_prefix }}-api-tg"
         state: present
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -389,7 +450,7 @@
             Port: 4000
     # Register instance in target group 
     - community.aws.elb_target_group:
-        name: pik-uat-fe-tg
+        name: "{{ name_prefix }}-fe-tg"
         state: present
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
@@ -401,3 +462,5 @@
         targets:
           - Id: "{{ pik_live_ec2_result.instance_ids[0] }}"
             Port: 5000
+
+

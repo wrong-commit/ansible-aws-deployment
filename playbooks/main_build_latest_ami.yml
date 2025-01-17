@@ -6,13 +6,14 @@
     pik_build_server_size: t2.small
     # t2.micro for running NodeJS/nginx/Postgres
     pik_live_server_size: t2.micro
-  # Create 2 security groups for HTTP Load Balancer access
+  # Secrets Manager to store runtime application secrets
+  # IAM role and policy to access secrets
   # Creates VPC 
-  # Creates EC2 Key Pair 
-  # Builds EC2 Clean Image Server
+  # 2 security groups for ELB to EC2 connection
+  # EC2 Key Pair 
+  # Generate EC2 Build Image Server
   # Generates AMI from EC2 Image 
   # Deletes Build Server
-  # Starts production instance from build servver
   tasks: 
     - assert:
         that:
@@ -20,15 +21,39 @@
         - aws_secret_key != ""
         - app_git_repo != ""
         - app_git_branch != ""
-        - conf_api_url != ""
-        - conf_db_host != ""
-        - conf_db_port != ""
-        - conf_db_user != ""
-        - conf_db_pass != ""
+        # - conf_api_url != ""
+        # - conf_db_host != ""
+        # - conf_db_port != ""
+        # - conf_db_user != ""
+        # - conf_db_pass != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
         tag_ec2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
+    - name: Create Secrets Manager 
+      include_role: 
+        name: create_secrets_manager
+      vars: 
+        secrets_name: pik-build-sm
+        # The only reason we pass in secrets to this playbook is so the build script can generate a valid build script to uat.
+        # Now this is done, we can fill this in with dummy values and clean up the GHA further. 
+        conf_db_host: "127.0.0.1"
+        conf_db_port: "5432"
+        conf_db_user: "dumb"
+        conf_db_pass: "dumber"
+        conf_api_url: "http://api.dummy.com"
+    - name: Create IAM roles 
+      include_role:
+        name: create_ec2_iam_role
+      vars:
+        iam_role_name: pik-auto-ec2-test
+        secrets_manager_arn: "{{ secrets_result.secret.arn }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+    - name: DEBUG iam result 
+      debug: 
+        var: iam_ec2_role_result
     - name: Create VPC "pik-build-vpc"
       include_role: 
         name: create_app_vpc
@@ -98,10 +123,16 @@
             cidr_ip: 0.0.0.0/0
             group_desc: Global HTTPS traffic inbound
         rules_egress:
-          # ELB access EC2 on to API
+          # ELB access RDS 
           - proto: tcp
             from_port: 5432
             to_port: 5432
+            group_id: "{{ ec2_sg_result.group_id }}"
+            group_desc: ELB access EC2 API egress
+          # ELB access EC2 on to API
+          - proto: tcp
+            from_port: 4000
+            to_port: 4000
             group_id: "{{ ec2_sg_result.group_id }}"
             group_desc: ELB access EC2 API egress
           # ELB access EC2 on to FE
@@ -183,6 +214,7 @@
         aws_secret_key: "{{ aws_secret_key }}"
         # Instance name - auto generated 
         name: "pik-build-{{ tag_ec2_creation_time }}"
+        iam_instance_profile: "{{ iam_instance_profile_arn_result }}"
         # User Data Script in bash. sudo included so script can be copy+pasted into a failed build 
         # EC2 for easier debugging. 
         user_data: |
@@ -205,9 +237,15 @@
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
           # Install git
-          sudo apt-get install -y git 
+          sudo apt-get install -y git
           # Install docker and plugins 
           sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          # Install aws cli 
+          sudo apt-get install -y curl unzip  jq
+          curl -o "awscliv2.zip" "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+          unzip -qq awscliv2.zip
+          sudo ./aws/install
+          aws --version
           # Clone application repository
           sudo mkdir /opt/app
           git clone {{ app_git_repo }} /tmp/app
@@ -215,20 +253,27 @@
           cd /opt/app
           git checkout {{ app_git_branch }}
           # Configure docker-compose file 
-          rm docker-compose.yml
-          export INJECT_API_URL={{ conf_api_url }}
-          export INJECT_DB_HOST={{ conf_db_host }}
-          export INJECT_DB_PORT={{ conf_db_port }}
-          export INJECT_DB_USER={{ conf_db_user }}
-          export INJECT_DB_PASS={{ conf_db_pass }}
-          envsubst < docker-compose.deploy.yml > docker-compose.yml
-          # Deploy with Docker Compose
-          docker compose up -d
+          sudo rm docker-compose.yml
+          sudo cp docker-compose.deploy.yml docker-compose.yml
+          # Run fetch-scripts to get secrets
+          sudo bash fetch-secrets.sh
+          # Compile all docker containers
+          sudo docker compose up -d
+          # Setup AusPohzt service 
+          sudo chmod +x fetch-secrets.sh
+          sudo cp auspohzt.service /etc/systemd/system/auspohzt.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable auspohzt.service
+          sudo systemctl start auspohzt.service
+          sudo systemctl status auspohzt.service
         # SSH Key Pair Name 
         key_name: "pik-build-keypair"
+        # Allow access to Tags 
+        metadata_options:
+          instance_metadata_tags: enabled
         # Subnet 1 
         vpc_subnet_id: "{{ pik_subnet_1_result.subnet.id }}"
-        # Instance size. Bigger than t2.micro
+        # Instance size. Bigger than t2.micro to build both apps at once
         instance_type: "{{ pik_build_server_size }}"
         security_group: "{{ ec2_sg_result.group_id }}"
         network_interfaces:
@@ -244,6 +289,7 @@
           Owner: Ash Ketchum
           Automation: Ansible
           Source: https://github.com/wrong-commit/ansible-aws-deployment
+          AWS_Secrets_Manager: pik-build-sm
       register: pik_ec2_result
     - name: Set next AMI variables 
       set_fact:
@@ -326,7 +372,7 @@
       until: 
         - elb_status_result.target_groups[0].targets_health_description[0].target_health.state == 'healthy'
         - elb_status_result.target_groups[0].targets_health_description[1].target_health.state == 'healthy'
-      retries: 30 # Retry 30 times
+      retries: 30 # Retry 15 times
       delay: 15   # Wait 15 seconds between retries
     - debug:
         var: elb_status_result
