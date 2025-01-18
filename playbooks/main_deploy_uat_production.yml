@@ -199,7 +199,7 @@
         target_type: instance
         # Listen on HTTP only
         protocol: http
-        port: 80
+        port: 4000
         # VPC 
         vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
         # Health check configuration
@@ -214,11 +214,6 @@
         healthy_threshold_count: 2
         # UAT 3
         unhealthy_threshold_count: 2
-        # targets:
-        #   - Id: "{{ pik_target_ami_instance }}"
-        #     Port: 4000
-        #   - Id: "{{ pik_target_ami_instance }}"
-        #     Port: 5000
       register: pik_elb_api_tg_result
     - debug:
         var: pik_elb_api_tg_result
@@ -233,7 +228,7 @@
         target_type: instance
         # Listen on HTTP only
         protocol: http
-        port: 80
+        port: 5000
         # VPC 
         vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
         # Health check configuration
@@ -248,11 +243,6 @@
         healthy_threshold_count: 2
         # UAT 3
         unhealthy_threshold_count: 2
-        # targets:
-        #   - Id: "{{ pik_target_ami_instance }}"
-        #     Port: 4000
-        #   - Id: "{{ pik_target_ami_instance }}"
-        #     Port: 5000
       register: pik_elb_fe_tg_result
     - debug:
         var: pik_elb_fe_tg_result
@@ -347,10 +337,16 @@
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
-        replace_instances: true
+        # Refresh all ASG instances. Update to use amazon.aws.autoscaling_instance_refresh module 
+        # replace_all_instances: true
         min_size: 1
         max_size: 2
         desired_capacity: 1
+        # Allow ASG to autoscale when ELB reports unhealthy target
+        # load_balancers: ["{{ name_prefix }}-elb"]
+        target_group_arns: 
+          - "{{ pik_elb_fe_tg_result.target_group_arn }}"
+          - "{{ pik_elb_api_tg_result.target_group_arn }}"
         vpc_zone_identifier: 
           - "{{ pik_subnet_1_result.subnet.id }}"
           - "{{ pik_subnet_2_result.subnet.id }}"
@@ -417,50 +413,15 @@
           - "{{ scale_down_result.arn }}" 
         ok_actions: []
         insufficient_data_actions: []
-    # Deploy new EC2 instance named 
-    - name: Deploy EC2 Image from AMI 
-      amazon.aws.ec2_instance:
-        # Instance name
-        name: "{{ name_prefix }}-{{ tag_ec2_instance_name }}"
-        # Ensure EC2 instance is created running 
-        state: running 
-        region: "{{ aws_region }}"
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
-        launch_template:
-          id: "{{ lt_result.template.launch_template_id }}"
-      register: pik_live_ec2_result
-    # - name: Debug created server result 
-    #   debug: 
-    #     var: pik_live_ec2_result
-    # Register instance in target groups
-    - community.aws.elb_target_group:
-        name: "{{ name_prefix }}-api-tg"
-        state: present
+    # Trigger deploy to environment
+    - name: Trigger Auto Scaling Group refresh 
+      amazon.aws.autoscaling_instance_refresh:
+        name: "{{ name_prefix }}-asg"
+        state: started
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         aws_region: "{{ aws_region }}"
-        # Relist same annoying details to update targets
-        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
-        protocol: http
-        port: 80
-        target_type: instance
-        targets:
-          - Id: "{{ pik_live_ec2_result.instance_ids[0] }}"
-            Port: 4000
-    # Register instance in target group 
-    - community.aws.elb_target_group:
-        name: "{{ name_prefix }}-fe-tg"
-        state: present
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
-        aws_region: "{{ aws_region }}"
-        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
-        protocol: http
-        port: 80
-        target_type: instance
-        targets:
-          - Id: "{{ pik_live_ec2_result.instance_ids[0] }}"
-            Port: 5000
-
-
+        preferences:
+          # Max healthy percent is 150. Intention is scale up to two instances during refresh, then down to 1
+          max_healthy_percentage: 200
+          min_healthy_percentage: 100
