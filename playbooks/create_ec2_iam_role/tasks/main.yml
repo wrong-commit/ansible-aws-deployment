@@ -53,7 +53,7 @@
     region: "{{ region }}"
   register: policy_result
 
-- name: Find all IAM instance profiles starting with /OurExamples/
+- name: Find all IAM instance profile ARN for created IAM role
   amazon.aws.iam_instance_profile_info:
     name: "{{ iam_role_name }}"
   register: raw_iam_instance_profile_result

@@ -2,16 +2,19 @@
   hosts: localhost
   gather_facts: false
   vars:
-    pik_env: UAT # UAT/PROD
+    pik_env: PROD # UAT/PROD
     hostenvs:
       UAT: 
         ec2_size: t2.micro
         name_prefix: pik-uat
+        rds_size: db.t3.micro
       PROD: 
-        ec2_size: t2.small 
+        ec2_size: t2.micro
         name_prefix: pik-prod
+        rds_size: db.t3.micro
     ec2_size: "{{ hostenvs[pik_env].ec2_size }}"
     name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
+    rds_size: "{{ hostenvs[pik_env].rds_size }}"
   # Create 2 security groups for HTTP Load Balancer access
   # Creates VPC 
   # Creates EC2 Key Pair 
@@ -30,32 +33,16 @@
         - app_ami_id != ""
         - ec2_size != ""
         - name_prefix != "" 
+        - rds_size != ""
+        # DB secrets
+        - conf_db_port != ""
+        - conf_db_user != ""
+        - conf_db_pass != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
         tag_ec2_instance_name: "{{ '%Y%m%d-%H%M%S' | strftime }}"
-    - name: Create Secrets Manager 
-      include_role: 
-        name: create_secrets_manager
-      vars: 
-        secrets_name: "{{ name_prefix }}-sm"
-        conf_db_host: "123.456.789.123"
-        conf_db_port: "5432"
-        conf_db_user: "dummy_user"
-        conf_db_pass: "dummy_pass"
-        conf_api_url: "https://{{ name_prefix }}-api.hunterorbit.com.au"
-    - name: Create IAM roles 
-      include_role:
-        name: create_ec2_iam_role
-      vars:
-        iam_role_name: "{{ name_prefix }}-ec2-role"
-        secrets_manager_arn: "{{ secrets_result.secret.arn }}"
-        region: "{{ aws_region }}"
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
-    - name: DEBUG iam result 
-      debug: 
-        var: iam_ec2_role_result
+        tag_db2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
     - name: Create VPC
       include_role: 
         name: create_app_vpc
@@ -168,7 +155,111 @@
       register: ec2_sg_result
     - name: Display ELB SG details
       debug:
-        msg: "ELB Security Group ID: {{ elb_sg_result.group_id }}"    
+        msg: "ELB Security Group ID: {{ elb_sg_result.group_id }}"
+    - name: Create RDS Security Group
+      amazon.aws.ec2_group:
+        name: "{{ name_prefix }}-rds-sg"
+        description: "Security group for {{ pik_env }} RDS servers"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
+        rules:
+          # Debug
+          # - proto: tcp
+          #   from_port: "{{ conf_db_port }}"
+          #   to_port: "{{ conf_db_port }}"
+          #   cidr_ip: 0.0.0.0/0
+          #   group_desc: Global debug inbound
+          # Allow RDS to access EC2 SG
+          - proto: tcp
+            from_port: "{{ conf_db_port }}"
+            to_port: "{{ conf_db_port }}"
+            group_id: "{{ ec2_sg_result.group_id }}"
+            group_desc: RDS access EC2 
+        rules_egress:
+          - proto: all
+            cidr_ip: 0.0.0.0/0
+            group_desc: Allow all traffic outbound
+        state: present
+      register: rds_sg_result
+      tags: create_sg
+    - name: Display RDS SG details
+      debug:
+        msg: "RDS Security Group ID: {{ rds_sg_result.group_id }}"
+    # Add RDS SG access to EC2 SG 
+    - name: Add RDS access to EC2 SG 
+      amazon.aws.ec2_group:
+        name: "{{ name_prefix }}-rds-sg"
+        description: "Security group for {{ pik_env }} RDS servers"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ pik_vpc_net_result.vpc.id }}"
+        # Only add new RDS access rule to EC2
+        purge_rules: false
+        purge_rules_egress: false 
+        rules:
+          # Allow EC2 to access RDS 
+          - proto: tcp
+            from_port: "{{ conf_db_port }}"
+            to_port: "{{ conf_db_port }}"
+            group_id: "{{ rds_sg_result.group_id }}"
+            group_desc: Allow EC2 access to RDS
+        state: present
+    - name: Create RDS Subnet Group
+      amazon.aws.rds_subnet_group:
+        state: present
+        name: "{{ name_prefix }}-sng"
+        description: "Pikachu {{ pik_env }} RDS Subnet Group"
+        # Does one subnet mean no DB replication? 
+        subnets:
+          - "{{ pik_subnet_1_result.subnet.id }}"
+          - "{{ pik_subnet_2_result.subnet.id }}"
+      register: rds_subnet_result
+    - name: Create RDS 
+      rds_instance:
+        # command: create
+        db_instance_identifier: "{{ name_prefix }}-db-2"
+        # Didn't create a DB named auspohzt...
+        db_name: auspohzt
+        engine: postgres
+        instance_type: "{{ rds_size }}"
+        publicly_accessible: true
+        allocated_storage: 20
+        username: "{{ conf_db_user }}"
+        password: "{{ conf_db_pass }}"
+        vpc_security_group_ids: "{{ rds_sg_result.group_id }}"
+        db_subnet_group_name: "{{ rds_subnet_result.subnet_group.name }}"
+        tags:
+          Environment: "{{ pik_env }}"
+          Application: Pikachu
+      register: rds_result
+    - name: RDS DNS Name
+      debug:
+        msg: "RDS DNS Name: {{ rds_result.endpoint.address }}" 
+    - name: Create Secrets Manager 
+      include_role: 
+        name: create_secrets_manager
+      vars: 
+        secrets_name: "{{ name_prefix }}-sm"
+        conf_db_host: "{{ rds_result.endpoint.address }}"
+        # conf_db_port: "{{ conf_db_port }}"
+        # conf_db_user: "{{ conf_db_user }}"
+        # conf_db_pass: "{{ conf_db_pass }}"
+        conf_api_url: "http://{{ name_prefix }}-api.hunterorbit.com.au"
+    - name: Create IAM roles 
+      include_role:
+        name: create_ec2_iam_role
+      vars:
+        iam_role_name: "{{ name_prefix }}-ec2-role"
+        secrets_manager_arn: "{{ secrets_result.secret.arn }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+    - name: DEBUG iam result 
+      debug: 
+        var: iam_ec2_role_result    
     - name: Create EC2 Key Pair
       ec2_key:
         name: "{{ name_prefix }}-keypair"
@@ -324,16 +415,15 @@
             groups: "{{ ec2_sg_result.group_id }}"
             subnet_id: "{{ pik_subnet_1_result.subnet.id }}"
       register: lt_result
-    # - debug:
-    #     var: lt_result
+    - debug:
+        var: lt_result.template
     # Create Auto Scaling group
     - name: Create Auto Scaling Group 
       amazon.aws.autoscaling_group: 
         name: "{{ name_prefix }}-asg"
         launch_template:
-          version: '$Latest'
+          version: "{{ lt_result.template.latest_version_number }}"
           launch_template_id: "{{ lt_result.template.launch_template_id }}"
-          launch_template_name: "{{ lt_result.template.launch_template_name }}"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"    
@@ -413,15 +503,15 @@
           - "{{ scale_down_result.arn }}" 
         ok_actions: []
         insufficient_data_actions: []
-    # Trigger deploy to environment
-    - name: Trigger Auto Scaling Group refresh 
-      amazon.aws.autoscaling_instance_refresh:
-        name: "{{ name_prefix }}-asg"
-        state: started
-        aws_access_key: "{{ aws_access_key }}"
-        aws_secret_key: "{{ aws_secret_key }}"
-        aws_region: "{{ aws_region }}"
-        preferences:
-          # Max healthy percent is 150. Intention is scale up to two instances during refresh, then down to 1
-          max_healthy_percentage: 200
-          min_healthy_percentage: 100
+    - name: Start ASG refresh, rollback when API TG is unhealthy
+      shell: | 
+        aws autoscaling start-instance-refresh --auto-scaling-group-name "{{ name_prefix }}-asg" --preferences '{"AutoRollback": true}' --desired-configuration '{"LaunchTemplate": {"LaunchTemplateName": "{{ lt_result.template.launch_template_name }}", "Version": "{{ lt_result.template.latest_version_number }}"}}'
+      # shell: | 
+      #   aws autoscaling start-instance-refresh --auto-scaling-group-name "{{ name_prefix }}-asg" --preferences '{"AutoRollback": true, "AlarmSpecification": {"Alarms": [ "pik-manual-prod-unhealthy-api" ] }}' --desired-configuration '{"LaunchTemplate": {"LaunchTemplateName": "{{ lt_result.template.launch_template_name }}", "Version": "{{ lt_result.template.latest_version_number }}"}}'
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      register: refresh_result
+    - debug: 
+        var: refresh_result

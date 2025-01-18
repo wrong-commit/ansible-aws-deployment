@@ -48,7 +48,7 @@ jobs:
           python -m pip install boto3 botocore
       # Install Ansible AWS Collection
       - name: Install Ansible Modules
-        run: ansible-galaxy collection install amazon.aws
+        run: ansible-galaxy collection install amazon.aws community.aws
       # Install AWS CLI to drop down to CLI when necessary
       # - name: Install AWS CLI 
       #   run: |

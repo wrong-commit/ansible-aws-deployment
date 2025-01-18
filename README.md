@@ -48,6 +48,9 @@ Ansible. This means I cannot check for a Healthy status before creating an AMI.
 [x] Create production ready AMI from automated EC2 build server 
 [x] Detect when EC2 is ready and application has built/started using ELB Target Groups
 [x] Setup and deploy PROD/UAT environments from one Playbook
+[x] Create DB for UAT/PROD environments during application deploy 
+[x] Configure EC2 autoscaling using ASG rules
+[ ] Automatically rollback failed deployments to UAT and PROD - require CloudWatch alarm to detect application not up. Currently using ELB TG UnhealthyStateRouting metric alarms too quickly and triggers a rollback while the VM boots
 [x] Do not use envsubst to populate docker-compose. Use AWS Secrets Manager
 [x] Update AusPohzt project to source application secrets from AWS Secrets Manager
 [ ] Anisble Production Blue/Green Deployment for latest AMI
