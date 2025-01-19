@@ -56,6 +56,9 @@
 - name: Find all IAM instance profile ARN for created IAM role
   amazon.aws.iam_instance_profile_info:
     name: "{{ iam_role_name }}"
+    region: "{{ aws_region }}"
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
   register: raw_iam_instance_profile_result
 - set_fact: 
     iam_instance_profile_arn_result: "{{ raw_iam_instance_profile_result.iam_instance_profiles[0].arn }}"

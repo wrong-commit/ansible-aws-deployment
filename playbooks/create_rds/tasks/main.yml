@@ -74,6 +74,9 @@
     state: present
     name: "{{ name_prefix }}-sng"
     description: "Pikachu {{ pik_env }} RDS Subnet Group"
+    region: "{{ aws_region }}"
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
     # Does one subnet mean no DB replication? 
     subnets:
       - "{{ pik_subnet_1_result.subnet.id }}"
@@ -84,6 +87,9 @@
   rds_instance:
     db_instance_identifier: "{{ name_prefix }}-db-5"
     db_name: auspohzt
+    region: "{{ aws_region }}"
+    aws_access_key: "{{ aws_access_key }}"
+    aws_secret_key: "{{ aws_secret_key }}"
     engine: postgres
     instance_type: "{{ rds_size }}"
     publicly_accessible: true
