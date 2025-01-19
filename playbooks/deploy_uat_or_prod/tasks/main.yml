@@ -267,7 +267,7 @@
                 - "{{ name_prefix }}-api.hunterorbit.com.au"
             Priority: 1
             Actions:
-            - TargetGroupName: "{{ name_prefix }}-api-tg"
+            - TargetGroupArn: "{{ pik_elb_api_tg_result.target_group_arn }}"
               Type: forward
           - Conditions:
             - Field: host-header
@@ -275,7 +275,7 @@
                 - "{{ name_prefix }}.hunterorbit.com.au"
             Priority: 2
             Actions:
-            - TargetGroupName: "{{ name_prefix }}-fe-tg"
+            - TargetGroupArn: "{{ pik_elb_fe_tg_result.target_group_arn }}"
               Type: forward
     state: present
   register: pik_elb_result

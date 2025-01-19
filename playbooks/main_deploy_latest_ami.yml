@@ -18,7 +18,7 @@
     name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
     rds_size: "{{ hostenvs[pik_env].rds_size }}"
     # Working auspohzt 
-    app_ami_id: ami-05bdedb77e605c1a6
+    app_ami_id: ami-09282a8b917c55b97
     # Linux AMI
     # app_ami_id: ami-0d11f9bfe33cfbe8b 
   # Deploys AMI to UAT or PROD environment
