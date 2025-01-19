@@ -1,8 +1,10 @@
-- name: Deploy UAT/PROD Script 
+- name: Deploy custom AMI 
   hosts: localhost
   gather_facts: false
   vars:
-    pik_env: PROD # UAT/PROD
+    # t2.small for building node JS applications and docker files 
+    pik_build_server_size: t2.small
+    pik_env: UAT # UAT/PROD
     hostenvs:
       UAT: 
         ec2_size: t2.micro
@@ -15,36 +17,24 @@
     ec2_size: "{{ hostenvs[pik_env].ec2_size }}"
     name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
     rds_size: "{{ hostenvs[pik_env].rds_size }}"
-    app_ami_id: ami-0c22fb05a13baf9f9
-  # Create 2 security groups for HTTP Load Balancer access
-  # Creates VPC 
-  # Creates EC2 Key Pair 
-  # Creates Target Group
-  # Creates new Launch Template version
-  # Creates Auto Scaling Group
-  # Creates ELB
-  # Deploys EC2 Instance
-  # Attach EC2 To Target Group
+    app_ami_id: ami-0ef93967f198ec7f3
+  # Deploys AMI to UAT or PROD environment
+  # Configure live load balancers and auto scaling rules
   tasks: 
     - assert:
         that:
         - aws_access_key != ""
         - aws_secret_key != ""
-        # AWS Launch AMI 
-        - app_ami_id != ""
-        - ec2_size != ""
-        - name_prefix != "" 
-        - rds_size != ""
+        - app_git_repo != ""
+        - app_git_branch != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
-        tag_ec2_instance_name: "{{ '%Y%m%d-%H%M%S' | strftime }}"
-        tag_db2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
+        tag_ec2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
     - name: Deploy UAT environment
       include_role: 
         name: deploy_uat_or_prod
       vars:
-        # app_ami_id: "{{ app_ami_id }}"
         # name_prefix: "{{ name_prefix }}"
         region: "{{ aws_region }}"
         aws_access_key: "{{ aws_access_key }}"
@@ -53,4 +43,4 @@
         # rds_size: db.t3.micro
         conf_db_port: 5432
         conf_db_user: dummy
-        conf_db_pass: dummy
+        conf_db_pass: dummypassword

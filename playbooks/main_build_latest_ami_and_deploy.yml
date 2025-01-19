@@ -1,0 +1,74 @@
+- name: Build EC2 Instance and deploy 
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # t2.small for building node JS applications and docker files 
+    pik_build_server_size: t2.small
+    pik_env: UAT # UAT/PROD
+    hostenvs:
+      UAT: 
+        ec2_size: t2.micro
+        name_prefix: pik-uat
+        rds_size: db.t3.micro
+      PROD: 
+        ec2_size: t2.micro
+        name_prefix: pik-prod
+        rds_size: db.t3.micro
+    ec2_size: "{{ hostenvs[pik_env].ec2_size }}"
+    name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
+    rds_size: "{{ hostenvs[pik_env].rds_size }}"
+  # Secrets Manager to store runtime application secrets
+  # IAM role and policy to access secrets
+  # Creates VPC 
+  # 2 security groups for ELB to EC2 connection
+  # EC2 Key Pair 
+  # Generate EC2 Build Image Server
+  # Generates AMI from EC2 Image 
+  # Deletes Build Server
+  # Deploys AMI to UAT or PROD environment
+  # Configure live load balancers and auto scaling rules
+  tasks: 
+    - assert:
+        that:
+        - aws_access_key != ""
+        - aws_secret_key != ""
+        - app_git_repo != ""
+        - app_git_branch != ""
+        # - conf_api_url != ""
+        # - conf_db_host != ""
+        # - conf_db_port != ""
+        # - conf_db_user != ""
+        # - conf_db_pass != ""
+    - name: Set AWS default varaibles
+      set_fact:
+        aws_region: ap-southeast-2
+        tag_ec2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
+    - name: Generate EC2 AMI
+      include_role: 
+        name: build_image_server
+      vars:
+        name_prefix: pik-build
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        app_git_repo: "{{ app_git_repo }}"
+        app_git_branch: "{{ app_git_branch }}"
+        ec2_size: "{{ pik_build_server_size }}"
+        rds_size: db.t3.micro
+    - name: Debug AMI result 
+      debug: 
+        var: pik_ami_result
+    - name: Deploy UAT environment
+      include_role: 
+        name: deploy_uat_or_prod
+      vars:
+        app_ami_id: "{{ pik_ami_result.image_id }}"
+        # name_prefix: "{{ name_prefix }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        # ec2_size: "{{ ec2_size }}"
+        # rds_size: db.t3.micro
+        conf_db_port: 5432
+        conf_db_user: dummy
+        conf_db_pass: dummypassword

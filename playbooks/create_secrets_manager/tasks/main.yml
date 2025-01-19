@@ -15,7 +15,7 @@
 - name: Create Secret Manager 
   community.aws.secretsmanager_secret: 
     name: "{{ secrets_name }}"
-    overwrite: true
+    overwrite: false
     region: "{{ aws_region }}"
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"

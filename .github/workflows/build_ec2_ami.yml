@@ -37,7 +37,7 @@ jobs:
         # Only run when act runner is present
         if: ${{ !github.event.act }}
         run: |
-          # Only run of venv exists 
+          # Only run if venv exists 
           if [[ -f "/opt/pipx/venvs/ansible-core/bin/activate" ]]; then  
             # Enter venv
             source /opt/pipx/venvs/ansible-core/bin/activate
@@ -71,17 +71,23 @@ jobs:
       - name: Syntax Check Ansible 
         working-directory: ./playbooks
         run: |
-          ansible-playbook --syntax-check main_build_latest_ami.yml 
-      # Run Ansible playbook to build Security Group
-      - name: Ansible - Build AMI 
-        working-directory: ./playbooks        
-        # Uses secrets AWS_ACCESS_KEY, AWS_SECRET_KEY
-        run: |
-          ansible-playbook main_build_latest_ami.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ env.APP_GIT_REPO }} app_git_branch=${{ env.APP_GIT_BRANCH }} conf_api_url=${{ env.CONF_API_URL }} conf_api_url=${{ env.CONF_API_URL }} conf_db_host=${{ env.CONF_DB_HOST }} conf_db_port=${{ env.CONF_DB_PORT }} conf_db_user=${{ env.CONF_DB_USER }} conf_db_pass=${{ env.CONF_DB_PASS }}"
+          ansible-playbook --syntax-check main_build_latest_ami_and_deploy.yml 
+      # # Run Ansible playbook to build Security Group
+      # - name: Ansible - Build AMI 
+      #   working-directory: ./playbooks        
+      #   # Uses secrets AWS_ACCESS_KEY, AWS_SECRET_KEY
+      #   run: |
+      #     ansible-playbook main_build_latest_ami.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ env.APP_GIT_REPO }} app_git_branch=${{ env.APP_GIT_BRANCH }}"
+      # - name: Ansible - Deploy AMI to UAT 
+      #   working-directory: ./playbooks
+      #   run: |
+      #     ansible-playbook main_deploy_into_uat.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_ami_id=ami-0f8e9769352fbd94a conf_db_port=${{ env.CONF_DB_PORT }} conf_db_user=${{ env.CONF_DB_USER }} conf_db_pass=${{ secrets.CONF_DB_PASS }}"
+      
       - name: Ansible - Deploy AMI to UAT 
         working-directory: ./playbooks
         run: |
-          ansible-playbook main_deploy_into_uat.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_ami_id=ami-0f8e9769352fbd94a"
+          ansible-playbook main_build_latest_ami_and_deploy.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ env.APP_GIT_REPO }} app_git_branch=${{ env.APP_GIT_BRANCH }}"
+
       # Store generated keypair in Github Actions storage when created by Ansible first time
       # - name: Archive production artifacts
       #   uses: actions/upload-artifact@v4
