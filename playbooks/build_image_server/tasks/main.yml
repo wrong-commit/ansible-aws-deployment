@@ -16,28 +16,18 @@
     - ec2_size != "" 
     - name_prefix != "" 
     - rds_size != "" 
+    - secret_manager_name != "" 
+    - secret_manager_arn != "" 
 - name: Set AWS default varaibles
   set_fact:
     aws_region: ap-southeast-2
     tag_ec2_creation_time: "{{ '%Y%m%d-%H%M%S' | strftime }}"
-- name: Create Secrets Manager 
-  include_role: 
-    name: create_secrets_manager
-  vars: 
-    secrets_name: "{{ name_prefix }}-sm"
-    # The only reason we pass in secrets to this playbook is so the build script can generate a valid build script to uat.
-    # Now this is done, we can fill this in with dummy values and clean up the GHA further. 
-    conf_db_host: "127.0.0.1"
-    conf_db_port: "5432"
-    conf_db_user: "dumb"
-    conf_db_pass: "dumber"
-    conf_api_url: "http://api.dummy.com"
 - name: Create IAM roles 
   include_role:
     name: create_ec2_iam_role
   vars:
     iam_role_name: "{{ name_prefix }}-ec2-role"
-    secrets_manager_arn: "{{ secrets_result.secret.arn }}"
+    secrets_manager_arn: "{{ secret_manager_arn }}"
     region: "{{ aws_region }}"
     aws_access_key: "{{ aws_access_key }}"
     aws_secret_key: "{{ aws_secret_key }}"
@@ -268,7 +258,7 @@
       Owner: Ash Ketchum
       Automation: Ansible
       Source: https://github.com/wrong-commit/ansible-aws-deployment
-      AWS_Secrets_Manager: "{{ name_prefix }}-sm"
+      AWS_Secrets_Manager: "{{ secret_manager_name }}"
   register: pik_ec2_result
 - name: Set next AMI variables 
   set_fact:

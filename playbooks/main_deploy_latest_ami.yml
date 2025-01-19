@@ -4,7 +4,7 @@
   vars:
     # t2.small for building node JS applications and docker files 
     pik_build_server_size: t2.small
-    pik_env: UAT # UAT/PROD
+    pik_env: PROD # UAT/PROD
     hostenvs:
       UAT: 
         ec2_size: t2.micro
@@ -17,7 +17,10 @@
     ec2_size: "{{ hostenvs[pik_env].ec2_size }}"
     name_prefix: "{{ hostenvs[pik_env].name_prefix }}"
     rds_size: "{{ hostenvs[pik_env].rds_size }}"
-    app_ami_id: ami-0ef93967f198ec7f3
+    # Working auspohzt 
+    app_ami_id: ami-05bdedb77e605c1a6
+    # Linux AMI
+    # app_ami_id: ami-0d11f9bfe33cfbe8b 
   # Deploys AMI to UAT or PROD environment
   # Configure live load balancers and auto scaling rules
   tasks: 
@@ -44,3 +47,4 @@
         conf_db_port: 5432
         conf_db_user: dummy
         conf_db_pass: dummypassword
+      
