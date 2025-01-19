@@ -23,6 +23,8 @@ Environment variables that need to be added to each GitHub Action Environment ar
 Secrets that need to be added to each GitHub Action Environment are as follows:  
 - `AWS_ACCESS_KEY`. AWS Access Key  
 - `AWS_SECRET_KEY`. AWS Secret Key
+- `CONF_DB_USER`. Database username 
+- `CONF_DB_PASS`. Database password
 
 # Playbooks     
 All playbooks used for deploying the application are listed in the `playbooks/` directory.  

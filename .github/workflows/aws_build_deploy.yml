@@ -90,7 +90,7 @@ jobs:
       - name: Ansible - Deploy AMI to UAT 
         working-directory: ./playbooks
         run: |
-          ansible-playbook main_build_latest_ami_and_deploy.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ vars.APP_GIT_REPO }} app_git_branch=${{ vars.APP_GIT_REPO }}"
+          ansible-playbook main_build_latest_ami_and_deploy.yml --extra-vars "aws_access_key=${{ secrets.AWS_ACCESS_KEY }} aws_secret_key=${{ secrets.AWS_SECRET_KEY }} app_git_repo=${{ vars.APP_GIT_REPO }} app_git_branch=${{ vars.APP_GIT_REPO }} conf_db_user=${{ secrets.CONF_DB_USER }} conf_db_pass=${{ secrets.CONF_DB_PASS }}"
       # Store generated keypair in Github Actions storage when created by Ansible first time
       # - name: Archive production artifacts
       #   uses: actions/upload-artifact@v4

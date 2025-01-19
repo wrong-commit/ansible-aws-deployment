@@ -19,8 +19,6 @@
     build_name_prefix: pik-build
     rds_size: "{{ hostenvs[pik_env].rds_size }}"
     conf_db_port: 5432
-    conf_db_user: dummy
-    conf_db_pass: dummypassword
   # Secrets Manager to store runtime application secrets
   # IAM role and policy to access secrets
   # Creates VPC 
@@ -41,8 +39,8 @@
         # - conf_api_url != ""
         # - conf_db_host != ""
         - conf_db_port != ""
-        # - conf_db_user != ""
-        # - conf_db_pass != ""
+        - conf_db_user != ""
+        - conf_db_pass != ""
     - name: Set AWS default varaibles
       set_fact:
         aws_region: ap-southeast-2
@@ -86,7 +84,7 @@
         ec2_sg_id: "{{ ec2_sg_result.group_id }}"
         name_prefix: "{{ build_name_prefix }}"
     # Populate build server secrets manager 
-    - name: Create Secrets Manager 
+    - name: Create Build Secrets Manager 
       include_role: 
         name: create_secrets_manager
       vars: 
@@ -94,6 +92,8 @@
         # The only reason we pass in secrets to this playbook is so the build script can generate a valid build script to uat.
         # Now this is done, we can fill this in with dummy values and clean up the GHA further. 
         conf_db_host: "{{ rds_result.endpoint.address }}"
+        conf_db_user: build-dummy
+        conf_db_pass: build-dummy-pass
         conf_api_url: "http://{{ build_name_prefix }}-api.hunterorbit.com.au"
     - name: Generate EC2 AMI
       include_role: 
